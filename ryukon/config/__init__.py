@@ -1,0 +1,1 @@
+from ryukon.config.core import Config

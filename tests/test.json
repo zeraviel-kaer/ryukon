@@ -1,0 +1,6 @@
+{
+  "database": {
+    "host": "newhost",
+    "port": 5432
+  }
+}
