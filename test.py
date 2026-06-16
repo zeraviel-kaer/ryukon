@@ -2,10 +2,9 @@ import ryukon
 
 app = ryukon.App()
 
-@app.window(title="Ryukon — Layout Test", width=400, height=350, center=True, resizable=True)
+@app.window(title="Ryukon - Layout Test", icon="test/favicon.ico", width=400, height=350, center=True, resizable=True)
 class MainWindow(ryukon.Window):
 
-    # Виджеты без x/y — расставляются автоматически
     layout = ryukon.VLayout(padding=15, gap=10)
 
     @ryukon.label(text="Привет, Ryukon!")
