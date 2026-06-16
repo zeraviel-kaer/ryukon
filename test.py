@@ -5,7 +5,7 @@ app = ryukon.App()
 @app.window(title="Ryukon - Layout Test", icon="test/favicon.ico", width=400, height=350, center=True, resizable=True)
 class MainWindow(ryukon.Window):
 
-    layout = ryukon.VLayout(padding=15, gap=10)
+    layout = ryukon.VLayout(padding=0, gap=0)
 
     @ryukon.label(text="Привет, Ryukon!")
     def greeting(self): ...
@@ -26,8 +26,7 @@ class MainWindow(ryukon.Window):
     async def on_volume(self, value: int):
         print(f"Громкость: {value}")
 
-    # Этот виджет с явными координатами — layout его не трогает
-    @ryukon.button(label="ОК", x=300, y=290, width=80, height=30)
+    @ryukon.button(label="ОК")
     async def on_ok(self):
         print("ОК!")
 
