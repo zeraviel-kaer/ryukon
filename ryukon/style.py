@@ -101,13 +101,15 @@ class Style:
     def __init__(
         self,
         *,
-        font: Font  | None = None,
-        bg:   Color | None = None,  # цвет фона
-        fg:   Color | None = None,  # цвет текста
+        font:   Font  | None = None,
+        bg:     Color | None = None,  # цвет фона
+        fg:     Color | None = None,  # цвет текста
+        radius: int   | None = None,  # радиус скругления углов (px)
     ) -> None:
-        self.font = font
-        self.bg   = bg
-        self.fg   = fg
+        self.font   = font
+        self.bg     = bg
+        self.fg     = fg
+        self.radius = radius
 
     def apply_to_widget(self, hwnd) -> None:
         if self.font and hwnd:

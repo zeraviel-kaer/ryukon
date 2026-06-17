@@ -77,6 +77,11 @@ class Input:
         user32.GetWindowTextW(self._hwnd, buf, 256)
         return buf.value
 
+    @value.setter
+    def value(self, text: str) -> None:
+        if self._hwnd:
+            user32.SetWindowTextW(self._hwnd, text)
+
     def _on_command(self, wparam: int, lparam: int) -> None:
         notif    = (wparam >> 16) & 0xFFFF
         EN_CHANGE = 0x0300

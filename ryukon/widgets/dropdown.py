@@ -37,7 +37,7 @@ class Dropdown:
         self,
         window:   Window,
         *,
-        options:  list[str] = [],
+        options:  list[str] | None = None,
         default:  int       = 0,   # индекс выбранного по умолчанию
         x:        int       = 0,
         y:        int       = 0,
@@ -46,7 +46,7 @@ class Dropdown:
         callback: Callable[..., Awaitable] | None = None,
     ) -> None:
         self._window   = window
-        self._options  = options
+        self._options  = list(options) if options else []
         self._default  = default
         self._x        = x
         self._y        = y

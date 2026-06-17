@@ -126,8 +126,10 @@ class Animation:
         # Финальное значение
         alpha = max(0, min(255, int(to * 255)))
         user32.SetLayeredWindowAttributes(window.hwnd, 0, alpha, LWA_ALPHA)
-        if to >= 1.0:
-            _set_layered(window.hwnd, False)
+        # Раньше тут отключался WS_EX_LAYERED при to >= 1.0 — но если окно
+        # независимо использует прозрачность где-то ещё (например, свой
+        # слайдер), это сбрасывало её механизм. Оставляем layered включённым:
+        # стоимость почти нулевая при alpha=255.
 
     @staticmethod
     async def animate_size(

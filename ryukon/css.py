@@ -12,6 +12,7 @@ _PROPS = {
     "font-size",
     "font-weight",
     "font-style",
+    "border-radius",
 }
 
 # Карта селекторов → имена классов ryukon
@@ -52,6 +53,7 @@ def _parse_block(props: dict[str, str]) -> Style:
     font_bold   = False
     font_italic = False
     has_font    = False
+    radius      = None
 
     for key, value in props.items():
         key   = key.strip().lower()
@@ -82,8 +84,14 @@ def _parse_block(props: dict[str, str]) -> Style:
             font_italic = value.lower() == "italic"
             has_font    = True
 
+        elif key == "border-radius":
+            try:
+                radius = int(re.sub(r"[^\d]", "", value))
+            except ValueError:
+                pass
+
     font = Font(family=font_family, size=font_size, bold=font_bold, italic=font_italic) if has_font else None
-    return Style(font=font, bg=bg, fg=fg)
+    return Style(font=font, bg=bg, fg=fg, radius=radius)
 
 
 def parse(css: str) -> dict[str, Style]:

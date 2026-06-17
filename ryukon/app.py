@@ -90,6 +90,12 @@ class App:
         self._stop()
 
     def run(self) -> None:
+        try:
+            # PROCESS_PER_MONITOR_DPI_AWARE — без этого Windows растягивает
+            # окно как картинку при масштабе >100%, и весь GDI+ рендер мылится.
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)  # type: ignore
+        except OSError:
+            pass
         if _HAS_WINLOOP:
             winloop.install()
         loop = asyncio.new_event_loop()
@@ -121,11 +127,25 @@ class App:
                 user32.RegisterHotKey(self._hotkeys._hwnd, hid, mods, vk)
                 self._hotkeys._hotkeys[hid] = cb
 
+        WM_KEYDOWN = 0x0100
+        VK_TAB     = 0x09
+        VK_SHIFT   = 0x10
+        GA_ROOT    = 2
+
         msg = wt.MSG()
         while self._running:
             if user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1):
                 if msg.message == 0x0012:  # WM_QUIT
                     break
+                if msg.message == WM_KEYDOWN and msg.wParam == VK_TAB:
+                    # Перехватываем Tab сами — иначе DispatchMessage пошлёт его как
+                    # обычный символ в фокусный Edit/TextArea (вставится табуляция).
+                    root_hwnd = user32.GetAncestor(msg.hwnd, GA_ROOT)
+                    win = next((w for w in self._active_windows if w._hwnd == root_hwnd), None)
+                    if win is not None:
+                        shift = (user32.GetKeyState(VK_SHIFT) & 0x8000) != 0
+                        win._handle_tab(shift)
+                        continue
                 user32.TranslateMessage(ctypes.byref(msg))
                 user32.DispatchMessageW(ctypes.byref(msg))
             else:

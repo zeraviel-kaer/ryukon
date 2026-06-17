@@ -28,6 +28,9 @@ _LVIF_TEXT         = 0x0001
 _LVCF_FMT          = 0x0001
 _LVCF_WIDTH        = 0x0002
 _LVCF_TEXT         = 0x0004
+_LVM_SETBKCOLOR      = 0x1001
+_LVM_SETTEXTBKCOLOR  = 0x1026
+_LVM_SETTEXTCOLOR    = 0x1024
 
 _widget_counter = 9000
 
@@ -117,8 +120,8 @@ class Table:
         self,
         window:   Window,
         *,
-        columns:  list[str]       = [],
-        rows:     list[list[str]] = [],
+        columns:  list[str] | None       = None,
+        rows:     list[list[str]] | None = None,
         x:        int             = 0,
         y:        int             = 0,
         width:    int             = 400,
@@ -126,8 +129,8 @@ class Table:
         callback: Callable[..., Awaitable] | None = None,
     ) -> None:
         self._window   = window
-        self._columns  = columns
-        self._rows     = list(rows)
+        self._columns  = list(columns) if columns else []
+        self._rows     = [list(row) for row in rows] if rows else []
         self._x        = x
         self._y        = y
         self._width    = width
@@ -172,6 +175,17 @@ class Table:
         self._rows.clear()
         if self._hwnd:
             user32.SendMessageW(self._hwnd, _LVM_DELETEALLITEMS, 0, 0)
+
+    def set_colors(self, bg: int | None = None, fg: int | None = None) -> None:
+        """Перекрашивает фон/текст ListView — LVM_SETBKCOLOR игнорирует
+        WM_CTLCOLOR*, поэтому обычный CSS-механизм окна тут не работает."""
+        if not self._hwnd:
+            return
+        if bg is not None:
+            user32.SendMessageW(self._hwnd, _LVM_SETBKCOLOR, 0, bg)
+            user32.SendMessageW(self._hwnd, _LVM_SETTEXTBKCOLOR, 0, bg)
+        if fg is not None:
+            user32.SendMessageW(self._hwnd, _LVM_SETTEXTCOLOR, 0, fg)
 
     def _on_command(self, wparam: int, lparam: int) -> None:
         pass

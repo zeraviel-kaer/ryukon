@@ -113,11 +113,11 @@ def checkbox(*, label: str = "", checked: bool = False,
     return decorator
 
 
-def dropdown(*, options: list[str] = [], default: int = 0,
+def dropdown(*, options: list[str] | None = None, default: int = 0,
              x: int = None, y: int = None, width: int = 200, height: int = 25):
     """@ryukon.dropdown(options=["A", "B", "C"], x=10, y=10)"""
     auto = x is None and y is None
-    kw   = {"options": options, "default": default, "width": width, "height": height}
+    kw   = {"options": options or [], "default": default, "width": width, "height": height}
     if x is not None: kw["x"] = x
     if y is not None: kw["y"] = y
 
@@ -196,12 +196,12 @@ def progressbar(*, min: int = 0, max: int = 100, value: int = 0,
     return decorator
 
 
-def table(*, columns: list[str] = [], rows: list[list[str]] = [],
+def table(*, columns: list[str] | None = None, rows: list[list[str]] | None = None,
           x: int = None, y: int = None, width: int = 400, height: int = 200):
     """@ryukon.table(columns=["Имя", "Возраст"], rows=[["Иван", "25"]])"""
     from ryukon.widgets.table import Table
     auto = x is None and y is None
-    kw   = {"columns": columns, "rows": rows, "width": width, "height": height}
+    kw   = {"columns": columns or [], "rows": rows or [], "width": width, "height": height}
     if x is not None: kw["x"] = x
     if y is not None: kw["y"] = y
 
