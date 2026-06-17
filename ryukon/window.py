@@ -26,6 +26,10 @@ WM_VSCROLL           = 0x0115
 WM_SIZE              = 0x0005
 WM_GETMINMAXINFO     = 0x0024
 WM_SETICON           = 0x0080
+WM_CTLCOLORSTATIC    = 0x0138
+WM_CTLCOLOREDIT      = 0x0133
+WM_CTLCOLORBTN       = 0x0135
+WM_CTLCOLORLISTBOX   = 0x0134
 COLOR_WINDOW         = 5
 IMAGE_ICON           = 1
 LR_LOADFROMFILE      = 0x0010
@@ -33,14 +37,14 @@ LR_DEFAULTSIZE       = 0x0040
 ICON_SMALL           = 0
 ICON_BIG             = 1
 
-# ── WinAPI типы ─────────────────────────────────────────────
 WNDPROC = ctypes.WINFUNCTYPE(
     ctypes.c_long,
     wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM
 )
 
-user32   = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
+user32   = ctypes.windll.user32   # type: ignore
+kernel32 = ctypes.windll.kernel32 # type: ignore
+gdi32    = ctypes.windll.gdi32    # type: ignore
 
 
 class WNDCLASSEX(ctypes.Structure):
@@ -71,7 +75,7 @@ class MINMAXINFO(ctypes.Structure):
 
 
 class Window:
-    """Базовое окно Ryukon. Наследуйся и вешай декораторы виджетов."""
+    """Базовое окно Ryukon."""
 
     _title:      str        = "Ryukon Window"
     _width:      int        = 800
@@ -82,16 +86,18 @@ class Window:
     _min_height: int | None = None
     _max_width:  int | None = None
     _max_height: int | None = None
-    _center:     bool       = False  # центрировать на экране при запуске
+    _center:     bool       = False
+    _is_main:    bool       = True   # False для дочерних окон
+    _modal:      bool       = False  # блокирует родителя пока открыто
 
     def __init__(self, app: App) -> None:
-        self._app          = app
-        self._hwnd:        wt.HWND | None = None
-        self._widgets:     list            = []
-        self._scrollers:   list            = []  # виджеты с scroll событиями (Slider)
-        self._wndproc_ref                  = None
-
-    # --- Внутреннее создание окна ---
+        self._app         = app
+        self._hwnd:       wt.HWND | None = None
+        self._widgets:    list            = []
+        self._scrollers:  list            = []
+        self._wndproc_ref                 = None
+        self._bg_brush                    = None  # кисть для фона окна
+        self._parent:     object | None   = None   # родительское окно
 
     def _create(self) -> None:
         hinstance  = kernel32.GetModuleHandleW(None)
@@ -102,14 +108,20 @@ class Window:
 
         self._wndproc_ref = WNDPROC(wnd_proc)
 
+        # Стиль окна
+        style_obj = getattr(self.__class__, "style", None)
+        if style_obj and style_obj.bg:
+            bg_brush = gdi32.CreateSolidBrush(style_obj.bg.colorref)
+        else:
+            bg_brush = ctypes.cast(ctypes.c_void_p(COLOR_WINDOW + 1), wt.HBRUSH)
+        self._bg_brush = bg_brush
+
         wc = WNDCLASSEX()
         wc.cbSize        = ctypes.sizeof(WNDCLASSEX)
         wc.style         = CS_HREDRAW | CS_VREDRAW
         wc.lpfnWndProc   = self._wndproc_ref
         wc.hInstance     = hinstance
-        wc.hbrBackground = ctypes.cast(
-            ctypes.c_void_p(COLOR_WINDOW + 1), wt.HBRUSH
-        )
+        wc.hbrBackground = bg_brush
         wc.lpszClassName = class_name
         wc.hCursor       = user32.LoadCursorW(None, ctypes.c_wchar_p(32512))
 
@@ -121,19 +133,17 @@ class Window:
         else:
             style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE
 
-        # Вычисляем позицию для центрирования
         x = CW_USEDEFAULT
         y = CW_USEDEFAULT
         if self._center:
-            sw = user32.GetSystemMetrics(0)  # ширина экрана
-            sh = user32.GetSystemMetrics(1)  # высота экрана
+            sw = user32.GetSystemMetrics(0)
+            sh = user32.GetSystemMetrics(1)
             x  = (sw - self._width)  // 2
             y  = (sh - self._height) // 2
 
         self._hwnd = user32.CreateWindowExW(
             0, class_name, self._title,
-            style, x, y,
-            self._width, self._height,
+            style, x, y, self._width, self._height,
             None, None, hinstance, None,
         )
 
@@ -154,24 +164,50 @@ class Window:
 
         for widget in self._widgets:
             widget._create(self._hwnd)
+            # Применяем стиль виджета если есть
+            w_style = getattr(widget, "style", None) or style_obj
+            if w_style:
+                w_style.apply_to_widget(widget._hwnd)
 
     def _dispatch(self, hwnd, msg, wparam, lparam) -> int:
-        """Диспетчер WinAPI сообщений."""
+        # Цвет фона и текста для дочерних виджетов
+        if msg in (WM_CTLCOLORSTATIC, WM_CTLCOLOREDIT, WM_CTLCOLORBTN, WM_CTLCOLORLISTBOX):
+            style_obj = getattr(self.__class__, "style", None)
+            if style_obj:
+                hdc = ctypes.cast(wparam, wt.HDC)
+                if style_obj.fg:
+                    gdi32.SetTextColor(hdc, style_obj.fg.colorref)
+                if style_obj.bg:
+                    gdi32.SetBkColor(hdc, style_obj.bg.colorref)
+                    return ctypes.cast(self._bg_brush, ctypes.c_void_p).value or 0
+            return user32.DefWindowProcW(hwnd, msg, ctypes.c_longlong(wparam), ctypes.c_longlong(lparam))
+
         if msg == WM_DESTROY:
-            user32.PostQuitMessage(0)
+            # PostQuitMessage только для главного окна
+            if self._is_main:
+                user32.PostQuitMessage(0)
             return 0
 
         if msg == WM_CLOSE:
             loop = asyncio.get_event_loop()
-            if hasattr(self, 'on_close'):
-                async def _try_close():
-                    if await self.on_close() is not False:
-                        self._app._stop()
-                        user32.DestroyWindow(hwnd)
-                loop.create_task(_try_close())
-            else:
-                loop.call_soon_threadsafe(self._app._stop)
+            async def _do_close():
+                # Проверяем on_close если переопределён в подклассе
+                if 'on_close' in type(self).__dict__:
+                    result = await self.on_close()
+                    if result is False:
+                        return
+                # Разблокируем родителя если модалка
+                if self._modal and self._parent and self._parent._hwnd:
+                    user32.EnableWindow(self._parent._hwnd, 1)
+                    user32.SetForegroundWindow(self._parent._hwnd)
+                # Убираем из активных окон
+                if self in self._app._active_windows:
+                    self._app._active_windows.remove(self)
                 user32.DestroyWindow(hwnd)
+                # Останавливаем приложение только если главное окно
+                if self._is_main:
+                    self._app._stop()
+            loop.create_task(_do_close())
             return 0
 
         if msg == WM_COMMAND:
@@ -188,10 +224,15 @@ class Window:
                     scroller._on_scroll()
                     break
 
-        if msg == WM_SIZE and hasattr(self, 'on_resize'):
+        if msg == WM_SIZE:
             w = lparam & 0xFFFF
             h = (lparam >> 16) & 0xFFFF
-            asyncio.get_event_loop().create_task(self.on_resize(w, h))
+            if w > 0 and h > 0:
+                layout = getattr(self.__class__, "layout", None)
+                if layout is not None and getattr(layout, "auto_resize", False):
+                    layout.apply(self._widgets, w, h)
+                if hasattr(self, 'on_resize'):
+                    asyncio.get_event_loop().create_task(self.on_resize(w, h))
 
         if msg == WM_GETMINMAXINFO:
             if any(v is not None for v in (self._min_width, self._min_height, self._max_width, self._max_height)):
@@ -213,8 +254,6 @@ class Window:
 
     def _register_scroll(self, widget) -> None:
         self._scrollers.append(widget)
-
-    # --- Публичное API ---
 
     @property
     def hwnd(self) -> wt.HWND | None:
@@ -240,4 +279,19 @@ class Window:
     async def on_ready(self) -> None:
         """Вызывается когда окно создано."""
 
-    # on_resize(w, h) и on_close() — переопределяются в подклассе при необходимости
+    def open_window(self, window_cls, *, modal: bool = False) -> None:
+        """Открывает дочернее окно.
+
+        self.open_window(SettingsWindow)
+        self.open_window(SettingsWindow, modal=True)  # блокирует текущее окно
+        """
+        win             = window_cls(self._app)
+        win._is_main    = False
+        win._parent     = self
+        win._modal      = modal
+        win._create()
+        self._app._active_windows.append(win)
+        # Блокируем родителя если модалка
+        if modal and self._hwnd:
+            user32.EnableWindow(self._hwnd, 0)
+        asyncio.get_event_loop().create_task(win.on_ready())

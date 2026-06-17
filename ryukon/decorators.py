@@ -150,3 +150,67 @@ def slider(*, min: int = 0, max: int = 100, value: int = 0, vertical: bool = Fal
         func._widget_factory   = factory
         return func
     return decorator
+
+
+def textarea(*, default: str | None = None, placeholder: str | None = None,
+             readonly: bool = False, x: int = None, y: int = None,
+             width: int = 200, height: int = 100):
+    """@ryukon.textarea(placeholder="Введи текст...", x=10, y=10)"""
+    from ryukon.widgets.textarea import TextArea
+    auto = x is None and y is None
+    kw   = {"default": default, "placeholder": placeholder, "readonly": readonly,
+            "width": width, "height": height}
+    if x is not None: kw["x"] = x
+    if y is not None: kw["y"] = y
+
+    def decorator(func):
+        def factory(window):
+            w = TextArea(window, **kw, callback=func)
+            w._auto_layout = auto
+            return w
+        func._is_ryukon_widget = True
+        func._widget_factory   = factory
+        return func
+    return decorator
+
+
+def progressbar(*, min: int = 0, max: int = 100, value: int = 0,
+                vertical: bool = False, x: int = None, y: int = None,
+                width: int = 200, height: int = 20):
+    """@ryukon.progressbar(min=0, max=100, value=0)"""
+    from ryukon.widgets.progressbar import ProgressBar
+    auto = x is None and y is None
+    kw   = {"min": min, "max": max, "value": value, "vertical": vertical,
+            "width": width, "height": height}
+    if x is not None: kw["x"] = x
+    if y is not None: kw["y"] = y
+
+    def decorator(func):
+        def factory(window):
+            w = ProgressBar(window, **kw)
+            w._auto_layout = auto
+            return w
+        func._is_ryukon_widget = True
+        func._widget_factory   = factory
+        return func
+    return decorator
+
+
+def table(*, columns: list[str] = [], rows: list[list[str]] = [],
+          x: int = None, y: int = None, width: int = 400, height: int = 200):
+    """@ryukon.table(columns=["Имя", "Возраст"], rows=[["Иван", "25"]])"""
+    from ryukon.widgets.table import Table
+    auto = x is None and y is None
+    kw   = {"columns": columns, "rows": rows, "width": width, "height": height}
+    if x is not None: kw["x"] = x
+    if y is not None: kw["y"] = y
+
+    def decorator(func):
+        def factory(window):
+            w = Table(window, **kw, callback=func)
+            w._auto_layout = auto
+            return w
+        func._is_ryukon_widget = True
+        func._widget_factory   = factory
+        return func
+    return decorator
