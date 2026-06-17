@@ -15,20 +15,24 @@ class Timer:
     def __init__(
         self,
         *,
-        interval: float,
-        callback: Callable[..., Awaitable],
-        autostart: bool = False,  # запустить сразу
+        interval:  float,
+        callback:  Callable[..., Awaitable],
+        autostart: bool = False,
     ) -> None:
-        self._interval  = interval
-        self._callback  = callback
-        self._running   = False
-        self._task:     asyncio.Task | None = None
+        self._interval = interval
+        self._callback = callback
+        self._running  = False
+        self._task:    asyncio.Task | None = None
 
         if autostart:
-            asyncio.get_event_loop().create_task(self._auto_start())
+            try:
+                loop = asyncio.get_event_loop()
+                loop.create_task(self._auto_start())
+            except RuntimeError:
+                pass
 
     async def _auto_start(self) -> None:
-        await asyncio.sleep(0)  # ждём следующего тика loop
+        await asyncio.sleep(0)
         self.start()
 
     def start(self) -> None:
@@ -43,6 +47,7 @@ class Timer:
         self._running = False
         if self._task and not self._task.done():
             self._task.cancel()
+            self._task = None
 
     def restart(self) -> None:
         """Перезапускает таймер."""
@@ -57,9 +62,7 @@ class Timer:
         try:
             while self._running:
                 await asyncio.sleep(self._interval)
-
                 if self._running:
                     await self._callback()
-
         except asyncio.CancelledError:
-            return
+            pass  # нормальная остановка

@@ -36,6 +36,7 @@ LR_LOADFROMFILE      = 0x0010
 LR_DEFAULTSIZE       = 0x0040
 ICON_SMALL           = 0
 ICON_BIG             = 1
+WM_RBUTTONUP         = 0x0205
 
 WNDPROC = ctypes.WINFUNCTYPE(
     ctypes.c_long,
@@ -98,6 +99,8 @@ class Window:
         self._wndproc_ref                 = None
         self._bg_brush                    = None  # кисть для фона окна
         self._parent:     object | None   = None   # родительское окно
+        self._menu        = None  # строка меню
+        self._context_menu = None  # контекстное меню
 
     def _create(self) -> None:
         hinstance  = kernel32.GetModuleHandleW(None)
@@ -162,6 +165,10 @@ class Window:
         user32.ShowWindow(self._hwnd, SW_SHOW)
         user32.UpdateWindow(self._hwnd)
 
+        # Строим меню если задано
+        if self._menu:
+            self._menu._build(self._hwnd)
+
         for widget in self._widgets:
             widget._create(self._hwnd)
             # Применяем стиль виджета если есть
@@ -200,6 +207,11 @@ class Window:
                 if self._modal and self._parent and self._parent._hwnd:
                     user32.EnableWindow(self._parent._hwnd, 1)
                     user32.SetForegroundWindow(self._parent._hwnd)
+                # Останавливаем таймеры окна
+                for attr in vars(self).values():
+                    from ryukon.timer import Timer
+                    if isinstance(attr, Timer):
+                        attr.stop()
                 # Убираем из активных окон
                 if self in self._app._active_windows:
                     self._app._active_windows.remove(self)
@@ -210,8 +222,16 @@ class Window:
             loop.create_task(_do_close())
             return 0
 
+        if msg == WM_RBUTTONUP:
+            if self._context_menu:
+                self._context_menu.show(hwnd)
+            return 0
+
         if msg == WM_COMMAND:
             ctrl_id = wparam & 0xFFFF
+            # Пункты меню имеют HIWORD(wparam) == 0
+            if (wparam >> 16) == 0 and self._menu:
+                self._menu._on_command(ctrl_id)
             for widget in self._widgets:
                 if getattr(widget, "_id", None) == ctrl_id:
                     widget._on_command(wparam, lparam)
@@ -278,6 +298,78 @@ class Window:
 
     async def on_ready(self) -> None:
         """Вызывается когда окно создано."""
+
+    def load_style(self, css: str) -> None:
+        """Применяет стили из CSS строки."""
+        """
+        self.load_style(
+            Window { background: #1e1e1e; color: #ffffff; font-size: 11; }
+            Button { background: #0078d4; color: #ffffff; }
+        )
+        """
+        from ryukon import css as css_module
+        self._apply_styles(css_module.parse(css))
+
+    def load_style_file(self, path: str) -> None:
+        """Применяет стили из .rcss файла.
+
+        self.load_style_file("styles/dark.rcss")
+        """
+        from ryukon import css as css_module
+        self._apply_styles(css_module.load(path))
+
+    def _apply_styles(self, styles: dict) -> None:
+        from ryukon.widgets.button      import Button
+        from ryukon.widgets.input       import Input
+        from ryukon.widgets.label       import Label
+        from ryukon.widgets.checkbox    import Checkbox
+        from ryukon.widgets.dropdown    import Dropdown
+        from ryukon.widgets.slider      import Slider
+        from ryukon.widgets.textarea    import TextArea
+        from ryukon.widgets.progressbar import ProgressBar
+        from ryukon.widgets.table       import Table
+
+        _widget_map = {
+            "button":      Button,
+            "input":       Input,
+            "label":       Label,
+            "checkbox":    Checkbox,
+            "dropdown":    Dropdown,
+            "slider":      Slider,
+            "textarea":    TextArea,
+            "progressbar": ProgressBar,
+            "table":       Table,
+        }
+
+        # Стиль окна
+        win_style = styles.get("window")
+        if win_style:
+            self.__class__.style = win_style
+            if self._hwnd and win_style.bg:
+                brush = gdi32.CreateSolidBrush(win_style.bg.colorref)
+                self._bg_brush = brush
+                user32.InvalidateRect(self._hwnd, None, 1)
+
+        # Стили виджетов
+        for selector, cls in _widget_map.items():
+            widget_style = styles.get(selector)
+            if not widget_style:
+                continue
+            for widget in self._widgets:
+                if isinstance(widget, cls):
+                    widget.style = widget_style
+                    if widget._hwnd:
+                        widget_style.apply_to_widget(widget._hwnd)
+
+    def set_menu(self, menu) -> None:
+        """Устанавливает строку меню окна."""
+        self._menu = menu
+        if self._hwnd:
+            menu._build(self._hwnd)
+
+    def set_context_menu(self, ctx) -> None:
+        """Устанавливает контекстное меню (правая кнопка на окне)."""
+        self._context_menu = ctx
 
     def open_window(self, window_cls, *, modal: bool = False) -> None:
         """Открывает дочернее окно.

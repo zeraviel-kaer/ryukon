@@ -131,6 +131,20 @@ class App:
             else:
                 await asyncio.sleep(0.001)
 
+        # Останавливаем все таймеры во всех окнах
+        from ryukon.timer import Timer
+        for win in self._active_windows:
+            for attr in vars(win).values():
+                if isinstance(attr, Timer):
+                    attr.stop()
+
+        # Ждём отмены всех задач
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+        for t in tasks:
+            t.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
         # Убираем трей при выходе
         if self._tray:
             self._tray.remove()

@@ -20,7 +20,7 @@ class SettingsWindow(ryukon.Window):
         print(f"Автозапуск: {checked}")
 
 
-@app.window(title="Ryukon", icon="test/favicon.ico", width=500, height=500, center=True)
+@app.window(title="Ryukon", width=500, height=500, center=True)
 class MainWindow(ryukon.Window):
     layout = ryukon.VLayout(padding=15, gap=8, auto_resize=True)
 
@@ -59,8 +59,41 @@ class MainWindow(ryukon.Window):
         self.open_window(SettingsWindow, modal=True)
 
     async def on_ready(self):
-        # Таймер — увеличиваем прогресс каждую секунду
+        # Стили через строку
+        self.load_style("""
+            Window  { background: #1e1e1e; color: #d4d4d4; font-family: Segoe UI; font-size: 11; }
+            Button  { color: #ffffff; font-weight: bold; }
+            Label   { color: #aaaaaa; }
+        """)
+
+        # Или из файла:
+        # self.load_style_file("dark.rcss")
+
+        # Анимация появления
+        await ryukon.Animation.animate_opacity(self, from_=0.0, to=1.0, duration=0.4)
+
+        # Таймер
         self._timer = ryukon.Timer(interval=1.0, callback=self._tick, autostart=True)
+
+        # Меню
+        menu = ryukon.Menu()
+
+        file_menu = menu.add("Файл")
+        file_menu.add(ryukon.MenuItem("Открыть", callback=self.on_open, shortcut="Ctrl+O"))
+        file_menu.add(ryukon.MenuItem("", separator=True))
+        file_menu.add(ryukon.MenuItem("Выход", callback=app.quit, shortcut="Ctrl+Q"))
+
+        edit_menu = menu.add("Правка")
+        edit_menu.add(ryukon.MenuItem("Очистить таблицу", callback=lambda: self.get("on_select").clear()))
+
+        self.set_menu(menu)
+
+        # Контекстное меню
+        ctx = ryukon.ContextMenu()
+        ctx.add(ryukon.MenuItem("Открыть файл", callback=self.on_open))
+        ctx.add(ryukon.MenuItem("", separator=True))
+        ctx.add(ryukon.MenuItem("Выход", callback=app.quit))
+        self.set_context_menu(ctx)
 
     async def _tick(self):
         bar = self.get("progress")
@@ -70,13 +103,9 @@ class MainWindow(ryukon.Window):
             bar.value = 0
 
     async def on_close(self):
-        if not ryukon.dialog.confirm("Выйти из приложения?"):
-            return False
-
-        if hasattr(self, "_timer"):
-            self._timer.stop()
-
-        return True
+        if ryukon.dialog.confirm("Выйти из приложения?"):
+            return True
+        return False
 
 
 tray.add_item("Открыть", callback=lambda: print("открыть"))
